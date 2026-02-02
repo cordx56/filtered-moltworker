@@ -6,6 +6,7 @@ import {
   approveEgressRequest,
   denyEgressRequest,
   approveAllEgressRequests,
+  denyAllEgressRequests,
   clearBlockedLog,
   createEgressRequest,
   getAllowlist,
@@ -101,6 +102,23 @@ export function EgressRequestsPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to approve all requests');
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleDenyAll = async () => {
+    if (pending.length === 0) return;
+    setActionInProgress('deny-all');
+    try {
+      const result = await denyAllEgressRequests();
+      if (result.success) {
+        await fetchData();
+      } else {
+        setError(result.error || 'Bulk denial failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to deny all requests');
     } finally {
       setActionInProgress(null);
     }
@@ -284,6 +302,14 @@ export function EgressRequestsPage() {
               >
                 {actionInProgress === 'approve-all' && <ButtonSpinner />}
                 Approve All ({pending.length})
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={handleDenyAll}
+                disabled={actionInProgress !== null}
+              >
+                {actionInProgress === 'deny-all' && <ButtonSpinner />}
+                Deny All
               </button>
             </div>
           )}

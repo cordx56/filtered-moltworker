@@ -326,6 +326,42 @@ egressRequestsApi.post('/approve-all', async (c) => {
 });
 
 /**
+ * POST /egress-requests/deny-all
+ * Deny all pending requests
+ */
+egressRequestsApi.post('/deny-all', async (c) => {
+  const sandbox = c.get('sandbox');
+
+  try {
+    await mountR2Storage(sandbox, c.env);
+
+    const proc = await sandbox.startProcess(
+      `node ${ADMIN_SCRIPTS_PATH}/approve-request.js --all --deny`
+    );
+    await waitForProcess(proc, CLI_TIMEOUT_MS);
+
+    const logs = await proc.getLogs();
+    const stdout = logs.stdout || '';
+    const success = stdout.includes('denied') || stdout.includes('Done');
+
+    // Parse counts from output
+    const deniedMatch = stdout.match(/(\d+) denied/);
+    const failedMatch = stdout.match(/(\d+) failed/);
+
+    return c.json({
+      success,
+      denied: deniedMatch ? parseInt(deniedMatch[1], 10) : 0,
+      failed: failedMatch ? parseInt(failedMatch[1], 10) : 0,
+      message: success ? 'All requests denied' : 'Processing failed',
+      output: stdout,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
+/**
  * POST /egress-requests/clear-log
  * Clear the egress filter blocked log
  */

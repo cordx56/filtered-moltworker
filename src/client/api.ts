@@ -239,6 +239,20 @@ export async function approveAllEgressRequests(): Promise<EgressApproveAllRespon
   });
 }
 
+export interface EgressDenyAllResponse {
+  success: boolean;
+  denied: number;
+  failed: number;
+  message?: string;
+  error?: string;
+}
+
+export async function denyAllEgressRequests(): Promise<EgressDenyAllResponse> {
+  return apiRequest<EgressDenyAllResponse>('/egress-requests/deny-all', {
+    method: 'POST',
+  });
+}
+
 export async function clearBlockedLog(): Promise<{ success: boolean; message?: string }> {
   return apiRequest<{ success: boolean; message?: string }>('/egress-requests/clear-log', {
     method: 'POST',

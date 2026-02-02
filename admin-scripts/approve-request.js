@@ -8,6 +8,7 @@
  *   node approve-request.js <id> --deny       # Deny a request
  *   node approve-request.js <id> --deny --reason "Not allowed"
  *   node approve-request.js --all             # Approve all pending requests
+ *   node approve-request.js --all --deny      # Deny all pending requests
  *
  * Options:
  *   --deny              Deny the request instead of approving
@@ -273,19 +274,23 @@ function main() {
     ensureDirectories();
 
     if (all) {
-      // Approve all pending requests
+      // Approve or deny all pending requests
       const pending = loadAllPending();
       if (pending.length === 0) {
-        console.log("No pending requests to approve.");
+        console.log(deny ? "No pending requests to deny." : "No pending requests to approve.");
         return;
       }
 
-      console.log(`Approving ${pending.length} pending request(s)...\n`);
+      const action = deny ? "Denying" : "Approving";
+      console.log(`${action} ${pending.length} pending request(s)...\n`);
       let success = 0;
       let failed = 0;
 
       for (const request of pending) {
-        if (approveRequest(request, config)) {
+        const result = deny
+          ? denyRequest(request, reason)
+          : approveRequest(request, config);
+        if (result) {
           success++;
         } else {
           failed++;
@@ -293,8 +298,9 @@ function main() {
         console.log("");
       }
 
-      console.log(`Done: ${success} approved, ${failed} failed`);
-      if (success > 0) {
+      const actionDone = deny ? "denied" : "approved";
+      console.log(`Done: ${success} ${actionDone}, ${failed} failed`);
+      if (!deny && success > 0) {
         console.log("\nNOTE: Restart the gateway to apply changes.");
       }
       return;
