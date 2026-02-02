@@ -244,3 +244,22 @@ export async function clearBlockedLog(): Promise<{ success: boolean; message?: s
     method: 'POST',
   });
 }
+
+export interface AllowlistResponse {
+  success: boolean;
+  content?: string;
+  message?: string;
+  error?: string;
+  needsRestart?: boolean;
+}
+
+export async function getAllowlist(): Promise<AllowlistResponse> {
+  return apiRequest<AllowlistResponse>('/egress-requests/allowlist');
+}
+
+export async function updateAllowlist(content: string): Promise<AllowlistResponse> {
+  return apiRequest<AllowlistResponse>('/egress-requests/allowlist', {
+    method: 'PUT',
+    body: JSON.stringify({ content }),
+  });
+}

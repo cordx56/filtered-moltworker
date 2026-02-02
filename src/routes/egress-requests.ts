@@ -350,3 +350,84 @@ egressRequestsApi.post('/clear-log', async (c) => {
     return c.json({ error: errorMessage }, 500);
   }
 });
+
+const ALLOWLIST_PATH = '/etc/egress-filter/allowlist.yaml';
+
+/**
+ * GET /egress-requests/allowlist
+ * Get the raw allowlist YAML content
+ */
+egressRequestsApi.get('/allowlist', async (c) => {
+  const sandbox = c.get('sandbox');
+
+  try {
+    await mountR2Storage(sandbox, c.env);
+
+    const proc = await sandbox.startProcess(`cat ${ALLOWLIST_PATH}`);
+    await waitForProcess(proc, CLI_TIMEOUT_MS);
+
+    const logs = await proc.getLogs();
+    const content = logs.stdout || '';
+
+    return c.json({
+      success: true,
+      content,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
+/**
+ * PUT /egress-requests/allowlist
+ * Update the allowlist YAML content
+ */
+egressRequestsApi.put('/allowlist', async (c) => {
+  const sandbox = c.get('sandbox');
+
+  let body: { content: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const { content } = body;
+  if (typeof content !== 'string') {
+    return c.json({ error: 'content is required and must be a string' }, 400);
+  }
+
+  try {
+    await mountR2Storage(sandbox, c.env);
+
+    // Write content using heredoc (single-quoted delimiter prevents shell expansion)
+    const tempPath = '/tmp/allowlist-new.yaml';
+    const writeCmd = `cat > ${tempPath} << 'EOFALLOWLIST'
+${content}
+EOFALLOWLIST`;
+
+    const writeProc = await sandbox.startProcess(writeCmd);
+    await waitForProcess(writeProc, CLI_TIMEOUT_MS);
+
+    // Move temp file to final location (atomic write)
+    const moveProc = await sandbox.startProcess(`mv ${tempPath} ${ALLOWLIST_PATH}`);
+    await waitForProcess(moveProc, CLI_TIMEOUT_MS);
+
+    // Sync to R2 in background
+    c.executionCtx.waitUntil(
+      syncToR2(sandbox, c.env).catch((err) => {
+        console.error('R2 sync after allowlist update failed:', err);
+      })
+    );
+
+    return c.json({
+      success: true,
+      message: 'Allowlist updated. Restart the gateway to apply changes.',
+      needsRestart: true,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});

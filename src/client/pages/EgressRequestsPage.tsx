@@ -8,6 +8,8 @@ import {
   approveAllEgressRequests,
   clearBlockedLog,
   createEgressRequest,
+  getAllowlist,
+  updateAllowlist,
   type EgressRequest,
   type BlockedConnection,
 } from '../api';
@@ -26,6 +28,10 @@ export function EgressRequestsPage() {
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [needsRestart, setNeedsRestart] = useState(false);
+  const [showAllowlistEditor, setShowAllowlistEditor] = useState(false);
+  const [allowlistContent, setAllowlistContent] = useState('');
+  const [allowlistOriginal, setAllowlistOriginal] = useState('');
+  const [allowlistLoading, setAllowlistLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -130,6 +136,52 @@ export function EgressRequestsPage() {
     } finally {
       setActionInProgress(null);
     }
+  };
+
+  const handleLoadAllowlist = async () => {
+    setAllowlistLoading(true);
+    try {
+      const result = await getAllowlist();
+      if (result.success && result.content !== undefined) {
+        setAllowlistContent(result.content);
+        setAllowlistOriginal(result.content);
+        setShowAllowlistEditor(true);
+      } else {
+        setError(result.error || 'Failed to load allowlist');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load allowlist');
+    } finally {
+      setAllowlistLoading(false);
+    }
+  };
+
+  const handleSaveAllowlist = async () => {
+    setActionInProgress('save-allowlist');
+    try {
+      const result = await updateAllowlist(allowlistContent);
+      if (result.success) {
+        setAllowlistOriginal(allowlistContent);
+        setNeedsRestart(true);
+      } else {
+        setError(result.error || 'Failed to save allowlist');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save allowlist');
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleCloseAllowlistEditor = () => {
+    if (allowlistContent !== allowlistOriginal) {
+      if (!confirm('You have unsaved changes. Discard them?')) {
+        return;
+      }
+    }
+    setShowAllowlistEditor(false);
+    setAllowlistContent('');
+    setAllowlistOriginal('');
   };
 
   const formatDate = (isoString: string) => {
@@ -361,6 +413,60 @@ export function EgressRequestsPage() {
               <p className="empty-message">No history yet.</p>
             )}
           </div>
+        )}
+      </section>
+
+      {/* Allowlist Editor Section */}
+      <section className="egress-section">
+        <div className="section-header">
+          <h2>Allowlist Editor</h2>
+          {!showAllowlistEditor ? (
+            <button
+              className="btn btn-secondary"
+              onClick={handleLoadAllowlist}
+              disabled={allowlistLoading || actionInProgress !== null}
+            >
+              {allowlistLoading && <ButtonSpinner />}
+              Edit Allowlist
+            </button>
+          ) : (
+            <div className="section-actions">
+              <button
+                className="btn btn-success"
+                onClick={handleSaveAllowlist}
+                disabled={actionInProgress !== null || allowlistContent === allowlistOriginal}
+              >
+                {actionInProgress === 'save-allowlist' && <ButtonSpinner />}
+                Save
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={handleCloseAllowlistEditor}
+                disabled={actionInProgress !== null}
+              >
+                Close
+              </button>
+            </div>
+          )}
+        </div>
+
+        {showAllowlistEditor ? (
+          <div className="allowlist-editor">
+            <textarea
+              className="allowlist-textarea"
+              value={allowlistContent}
+              onChange={(e) => setAllowlistContent(e.target.value)}
+              spellCheck={false}
+              placeholder="Loading..."
+            />
+            {allowlistContent !== allowlistOriginal && (
+              <p className="unsaved-warning">You have unsaved changes</p>
+            )}
+          </div>
+        ) : (
+          <p className="empty-message">
+            Click "Edit Allowlist" to view and edit the raw allowlist.yaml file.
+          </p>
         )}
       </section>
     </div>
