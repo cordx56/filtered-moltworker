@@ -36,8 +36,10 @@ function isIpAddress(str) {
 //   [egress-filter] DoH query blocked: example.com
 const BLOCKED_PATTERNS = [
   // Connection/DNS query with hostname in parentheses - extract domain
+  // IPv4: 1.2.3.4:443 (example.com)
+  // IPv6: 2001:db8::1:443 (example.com) - port is the last number after final colon
   {
-    pattern: /\[egress-filter\] (?:Connection|DNS query) blocked: [\d.]+:(\d+) \(([^)]+)\)/,
+    pattern: /\[egress-filter\] (?:Connection|DNS query) blocked: .+:(\d+) \(([^)]+)\)/,
     extract: (match) => ({ domain: match[2], port: parseInt(match[1]) }),
   },
   // DoH query (hostname only)
