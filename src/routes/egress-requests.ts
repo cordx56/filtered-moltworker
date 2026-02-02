@@ -8,6 +8,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { ensureMoltbotGateway } from '../gateway/process';
+import { mountR2Storage } from '../gateway/r2';
 import { syncToR2 } from '../gateway/sync';
 
 const SKILLS_PATH = '/root/clawd/skills/egress-request/scripts';
@@ -153,7 +154,8 @@ egressRequestsApi.post('/', async (c) => {
   }
 
   try {
-    await ensureMoltbotGateway(sandbox, c.env);
+    // Only mount R2, don't wait for gateway (create request is file-only operation)
+    await mountR2Storage(sandbox, c.env);
 
     const target = domain || ip;
     let cmd = `node ${SKILLS_PATH}/request-access.js "${target}" --port ${port}`;
@@ -200,7 +202,8 @@ egressRequestsApi.post('/:id/approve', async (c) => {
   }
 
   try {
-    await ensureMoltbotGateway(sandbox, c.env);
+    // Only mount R2, don't wait for gateway (approve is file-only operation)
+    await mountR2Storage(sandbox, c.env);
 
     const proc = await sandbox.startProcess(
       `node ${ADMIN_SCRIPTS_PATH}/approve-request.js "${id}"`
@@ -255,7 +258,8 @@ egressRequestsApi.post('/:id/deny', async (c) => {
   }
 
   try {
-    await ensureMoltbotGateway(sandbox, c.env);
+    // Only mount R2, don't wait for gateway (deny is file-only operation)
+    await mountR2Storage(sandbox, c.env);
 
     let cmd = `node ${ADMIN_SCRIPTS_PATH}/approve-request.js "${id}" --deny`;
     if (body.reason) {
@@ -290,7 +294,8 @@ egressRequestsApi.post('/approve-all', async (c) => {
   const sandbox = c.get('sandbox');
 
   try {
-    await ensureMoltbotGateway(sandbox, c.env);
+    // Only mount R2, don't wait for gateway (approve-all is file-only operation)
+    await mountR2Storage(sandbox, c.env);
 
     const proc = await sandbox.startProcess(
       `node ${ADMIN_SCRIPTS_PATH}/approve-request.js --all`
@@ -337,7 +342,8 @@ egressRequestsApi.post('/clear-log', async (c) => {
   const sandbox = c.get('sandbox');
 
   try {
-    await ensureMoltbotGateway(sandbox, c.env);
+    // Only mount R2, don't wait for gateway (clear-log is file-only operation)
+    await mountR2Storage(sandbox, c.env);
 
     const proc = await sandbox.startProcess(
       `node ${SKILLS_PATH}/check-blocks.js --clear`
