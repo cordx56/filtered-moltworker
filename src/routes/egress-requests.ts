@@ -10,21 +10,12 @@ import type { AppEnv } from '../types';
 import { ensureMoltbotGateway } from '../gateway/process';
 import { mountR2Storage } from '../gateway/r2';
 import { syncToR2 } from '../gateway/sync';
+import { waitForProcess } from '../gateway/utils';
 
 const SKILLS_PATH = '/root/clawd/skills/egress-request/scripts';
 const ADMIN_SCRIPTS_PATH = '/root/admin-scripts';
 const CLI_TIMEOUT_MS = 20_000;
 const SYNC_TIMEOUT_MS = 30_000;
-
-/**
- * Wait for a process to complete with timeout
- */
-async function waitForProcess(
-  proc: { waitForExit: (opts: { timeout: number }) => Promise<void> },
-  timeout: number
-): Promise<void> {
-  await proc.waitForExit({ timeout });
-}
 
 export const egressRequestsApi = new Hono<AppEnv>();
 
