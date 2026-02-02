@@ -54,7 +54,7 @@ domains:
     ports: [443]
     reason: Discord services
 
-  - pattern: "gateway.discord.gg"
+  - pattern: "*.discord.gg"
     ports: [443]
     reason: Discord Gateway
 
