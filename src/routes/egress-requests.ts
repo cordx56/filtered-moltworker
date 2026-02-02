@@ -1,0 +1,316 @@
+/**
+ * Egress Requests API endpoints
+ *
+ * Provides CRUD operations for egress filter access requests.
+ * All endpoints require Cloudflare Access authentication.
+ */
+
+import { Hono } from 'hono';
+import type { AppEnv } from '../types';
+import { ensureMoltbotGateway } from '../gateway/process';
+import { syncToR2 } from '../gateway/sync';
+
+const SKILLS_PATH = '/root/clawd/skills/egress-request/scripts';
+const ADMIN_SCRIPTS_PATH = '/root/admin-scripts';
+const CLI_TIMEOUT_MS = 20_000;
+const SYNC_TIMEOUT_MS = 30_000;
+
+/**
+ * Wait for a process to complete with timeout
+ */
+async function waitForProcess(
+  proc: { waitForExit: (opts: { timeout: number }) => Promise<void> },
+  timeout: number
+): Promise<void> {
+  await proc.waitForExit({ timeout });
+}
+
+export const egressRequestsApi = new Hono<AppEnv>();
+
+/**
+ * GET /egress-requests
+ * List all pending egress access requests
+ */
+egressRequestsApi.get('/', async (c) => {
+  const sandbox = c.get('sandbox');
+
+  try {
+    await ensureMoltbotGateway(sandbox, c.env);
+
+    const proc = await sandbox.startProcess(`node ${SKILLS_PATH}/list-requests.js --json --all`);
+    await waitForProcess(proc, CLI_TIMEOUT_MS);
+
+    const logs = await proc.getLogs();
+    const stdout = logs.stdout || '';
+
+    try {
+      const data = JSON.parse(stdout);
+      return c.json(data);
+    } catch {
+      return c.json({
+        pending: [],
+        approved: [],
+        denied: [],
+        error: 'Failed to parse response',
+        raw: stdout,
+      });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
+/**
+ * GET /egress-requests/blocked
+ * Get recently blocked connections from egress filter log
+ */
+egressRequestsApi.get('/blocked', async (c) => {
+  const sandbox = c.get('sandbox');
+
+  try {
+    await ensureMoltbotGateway(sandbox, c.env);
+
+    const proc = await sandbox.startProcess(`node ${SKILLS_PATH}/check-blocks.js --json`);
+    await waitForProcess(proc, CLI_TIMEOUT_MS);
+
+    const logs = await proc.getLogs();
+    const stdout = logs.stdout || '';
+
+    try {
+      const data = JSON.parse(stdout);
+      return c.json(data);
+    } catch {
+      return c.json({
+        blocks: [],
+        error: 'Failed to parse response',
+        raw: stdout,
+      });
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
+/**
+ * POST /egress-requests
+ * Create a new access request
+ */
+egressRequestsApi.post('/', async (c) => {
+  const sandbox = c.get('sandbox');
+
+  let body: { domain: string; port?: number; reason?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const { domain, port = 443, reason } = body;
+
+  if (!domain) {
+    return c.json({ error: 'domain is required' }, 400);
+  }
+
+  // Validate domain format (must be a valid domain, not IP)
+  if (!/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/.test(domain)) {
+    return c.json({ error: 'Invalid domain format' }, 400);
+  }
+
+  try {
+    await ensureMoltbotGateway(sandbox, c.env);
+
+    let cmd = `node ${SKILLS_PATH}/request-access.js "${domain}" --port ${port}`;
+    if (reason) {
+      // Escape reason for shell
+      const escapedReason = reason.replace(/"/g, '\\"');
+      cmd += ` --reason "${escapedReason}"`;
+    }
+
+    const proc = await sandbox.startProcess(cmd);
+    await waitForProcess(proc, CLI_TIMEOUT_MS);
+
+    const logs = await proc.getLogs();
+    const stdout = logs.stdout || '';
+    const success = stdout.includes('created successfully') || stdout.includes('already pending');
+
+    return c.json({
+      success,
+      domain,
+      port,
+      message: success ? 'Request created' : 'Failed to create request',
+      output: stdout,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
+/**
+ * POST /egress-requests/:id/approve
+ * Approve a pending request (adds to allowlist)
+ */
+egressRequestsApi.post('/:id/approve', async (c) => {
+  const sandbox = c.get('sandbox');
+  const id = c.req.param('id');
+
+  if (!id) {
+    return c.json({ error: 'Request ID is required' }, 400);
+  }
+
+  try {
+    await ensureMoltbotGateway(sandbox, c.env);
+
+    const proc = await sandbox.startProcess(
+      `node ${ADMIN_SCRIPTS_PATH}/approve-request.js "${id}"`
+    );
+    await waitForProcess(proc, CLI_TIMEOUT_MS);
+
+    const logs = await proc.getLogs();
+    const stdout = logs.stdout || '';
+    const stderr = logs.stderr || '';
+    const success = stdout.includes('approved') || stdout.includes('Added');
+
+    // Sync to R2 in background after successful approval
+    if (success) {
+      c.executionCtx.waitUntil(
+        syncToR2(sandbox, c.env).catch((err) => {
+          console.error('R2 sync after approval failed:', err);
+        })
+      );
+    }
+
+    return c.json({
+      success,
+      id,
+      message: success ? 'Request approved and added to allowlist' : 'Approval failed',
+      output: stdout,
+      error: success ? undefined : stderr || stdout,
+      needsRestart: success,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
+/**
+ * POST /egress-requests/:id/deny
+ * Deny a pending request
+ */
+egressRequestsApi.post('/:id/deny', async (c) => {
+  const sandbox = c.get('sandbox');
+  const id = c.req.param('id');
+
+  let body: { reason?: string } = {};
+  try {
+    body = await c.req.json();
+  } catch {
+    // Body is optional
+  }
+
+  if (!id) {
+    return c.json({ error: 'Request ID is required' }, 400);
+  }
+
+  try {
+    await ensureMoltbotGateway(sandbox, c.env);
+
+    let cmd = `node ${ADMIN_SCRIPTS_PATH}/approve-request.js "${id}" --deny`;
+    if (body.reason) {
+      const escapedReason = body.reason.replace(/"/g, '\\"');
+      cmd += ` --reason "${escapedReason}"`;
+    }
+
+    const proc = await sandbox.startProcess(cmd);
+    await waitForProcess(proc, CLI_TIMEOUT_MS);
+
+    const logs = await proc.getLogs();
+    const stdout = logs.stdout || '';
+    const success = stdout.includes('denied') || stdout.includes('archived');
+
+    return c.json({
+      success,
+      id,
+      message: success ? 'Request denied' : 'Denial failed',
+      output: stdout,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
+/**
+ * POST /egress-requests/approve-all
+ * Approve all pending requests
+ */
+egressRequestsApi.post('/approve-all', async (c) => {
+  const sandbox = c.get('sandbox');
+
+  try {
+    await ensureMoltbotGateway(sandbox, c.env);
+
+    const proc = await sandbox.startProcess(
+      `node ${ADMIN_SCRIPTS_PATH}/approve-request.js --all`
+    );
+    await waitForProcess(proc, CLI_TIMEOUT_MS);
+
+    const logs = await proc.getLogs();
+    const stdout = logs.stdout || '';
+    const success = stdout.includes('approved') || stdout.includes('Done');
+
+    // Parse counts from output
+    const approvedMatch = stdout.match(/(\d+) approved/);
+    const failedMatch = stdout.match(/(\d+) failed/);
+    const approvedCount = approvedMatch ? parseInt(approvedMatch[1], 10) : 0;
+
+    // Sync to R2 in background after successful approval
+    if (success && approvedCount > 0) {
+      c.executionCtx.waitUntil(
+        syncToR2(sandbox, c.env).catch((err) => {
+          console.error('R2 sync after bulk approval failed:', err);
+        })
+      );
+    }
+
+    return c.json({
+      success,
+      approved: approvedCount,
+      failed: failedMatch ? parseInt(failedMatch[1], 10) : 0,
+      message: success ? 'All requests processed' : 'Processing failed',
+      output: stdout,
+      needsRestart: success,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
+/**
+ * POST /egress-requests/clear-log
+ * Clear the egress filter blocked log
+ */
+egressRequestsApi.post('/clear-log', async (c) => {
+  const sandbox = c.get('sandbox');
+
+  try {
+    await ensureMoltbotGateway(sandbox, c.env);
+
+    const proc = await sandbox.startProcess(
+      `node ${SKILLS_PATH}/check-blocks.js --clear`
+    );
+    await waitForProcess(proc, CLI_TIMEOUT_MS);
+
+    return c.json({
+      success: true,
+      message: 'Log cleared',
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});

@@ -140,3 +140,105 @@ export async function triggerSync(): Promise<SyncResponse> {
     method: 'POST',
   });
 }
+
+// ============================================================
+// Egress Requests API
+// ============================================================
+
+export interface EgressRequest {
+  id: string;
+  domain: string;
+  port: number;
+  reason?: string;
+  requested_at: string;
+  status: 'pending' | 'approved' | 'denied';
+  approved_at?: string;
+  denied_at?: string;
+  deny_reason?: string;
+}
+
+export interface BlockedConnection {
+  domain: string;
+  port: number;
+  count: number;
+}
+
+export interface EgressRequestsListResponse {
+  pending: EgressRequest[];
+  approved: EgressRequest[];
+  denied: EgressRequest[];
+  error?: string;
+}
+
+export interface BlockedConnectionsResponse {
+  blocks: BlockedConnection[];
+  message?: string;
+  error?: string;
+}
+
+export interface EgressActionResponse {
+  success: boolean;
+  id?: string;
+  host?: string;
+  port?: number;
+  message?: string;
+  output?: string;
+  error?: string;
+  needsRestart?: boolean;
+}
+
+export interface EgressApproveAllResponse {
+  success: boolean;
+  approved: number;
+  failed: number;
+  message?: string;
+  error?: string;
+  needsRestart?: boolean;
+}
+
+export async function listEgressRequests(): Promise<EgressRequestsListResponse> {
+  return apiRequest<EgressRequestsListResponse>('/egress-requests');
+}
+
+export async function getBlockedConnections(): Promise<BlockedConnectionsResponse> {
+  return apiRequest<BlockedConnectionsResponse>('/egress-requests/blocked');
+}
+
+export async function createEgressRequest(
+  domain: string,
+  port: number = 443,
+  reason?: string
+): Promise<EgressActionResponse> {
+  return apiRequest<EgressActionResponse>('/egress-requests', {
+    method: 'POST',
+    body: JSON.stringify({ domain, port, reason }),
+  });
+}
+
+export async function approveEgressRequest(id: string): Promise<EgressActionResponse> {
+  return apiRequest<EgressActionResponse>(`/egress-requests/${id}/approve`, {
+    method: 'POST',
+  });
+}
+
+export async function denyEgressRequest(
+  id: string,
+  reason?: string
+): Promise<EgressActionResponse> {
+  return apiRequest<EgressActionResponse>(`/egress-requests/${id}/deny`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function approveAllEgressRequests(): Promise<EgressApproveAllResponse> {
+  return apiRequest<EgressApproveAllResponse>('/egress-requests/approve-all', {
+    method: 'POST',
+  });
+}
+
+export async function clearBlockedLog(): Promise<{ success: boolean; message?: string }> {
+  return apiRequest<{ success: boolean; message?: string }>('/egress-requests/clear-log', {
+    method: 'POST',
+  });
+}

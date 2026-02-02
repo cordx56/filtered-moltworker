@@ -66,6 +66,9 @@ COPY moltbot.json.template /root/.clawdbot-templates/moltbot.json.template
 # Copy custom skills
 COPY skills/ /root/clawd/skills/
 
+# Copy admin scripts (not accessible to AI agents)
+COPY admin-scripts/ /root/admin-scripts/
+
 # Set working directory
 WORKDIR /root/clawd
 

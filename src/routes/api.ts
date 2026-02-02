@@ -3,6 +3,7 @@ import type { AppEnv } from '../types';
 import { createAccessMiddleware } from '../auth';
 import { ensureMoltbotGateway, findExistingMoltbotProcess, mountR2Storage, syncToR2, waitForProcess } from '../gateway';
 import { R2_MOUNT_PATH } from '../config';
+import { egressRequestsApi } from './egress-requests';
 
 // CLI commands can take 10-15 seconds to complete due to WebSocket connection overhead
 const CLI_TIMEOUT_MS = 20000;
@@ -277,6 +278,9 @@ adminApi.post('/gateway/restart', async (c) => {
     return c.json({ error: errorMessage }, 500);
   }
 });
+
+// Mount egress requests API under admin
+adminApi.route('/egress-requests', egressRequestsApi);
 
 // Mount admin API routes under /admin
 api.route('/admin', adminApi);

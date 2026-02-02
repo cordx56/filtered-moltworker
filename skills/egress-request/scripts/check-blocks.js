@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Check egress filter blocked connections and report hosts that need allowlist access.
+ * Check egress filter blocked connections and report domains that need allowlist access.
+ * Only domains are reported - IP-only blocks are skipped since they can't be added to allowlist.
  *
  * Usage:
  *   node check-blocks.js [--clear] [--json]
@@ -11,9 +12,21 @@
  */
 
 const fs = require("fs");
-const path = require("path");
 
 const LOG_FILE = "/var/log/egress-filter.log";
+
+// Check if a string looks like an IP address
+function isIpAddress(str) {
+  // IPv4
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(str)) {
+    return true;
+  }
+  // IPv6
+  if (/^[0-9a-fA-F:]+$/.test(str) && str.includes(":")) {
+    return true;
+  }
+  return false;
+}
 
 // Pattern to match egress-filter blocked messages
 // Examples:
@@ -22,46 +35,40 @@ const LOG_FILE = "/var/log/egress-filter.log";
 //   [egress-filter] DNS query blocked: 1.2.3.4:53 (example.com)
 //   [egress-filter] DoH query blocked: example.com
 const BLOCKED_PATTERNS = [
-  // Connection/DNS query with hostname in parentheses
-  /\[egress-filter\] (?:Connection|DNS query) blocked: [\d.]+:(\d+) \(([^)]+)\)/,
-  // Connection/DNS query without hostname (IP only)
-  /\[egress-filter\] (?:Connection|DNS query) blocked: ([\d.]+):(\d+)$/,
+  // Connection/DNS query with hostname in parentheses - extract domain
+  {
+    pattern: /\[egress-filter\] (?:Connection|DNS query) blocked: [\d.]+:(\d+) \(([^)]+)\)/,
+    extract: (match) => ({ domain: match[2], port: parseInt(match[1]) }),
+  },
   // DoH query (hostname only)
-  /\[egress-filter\] DoH query blocked: (.+)$/,
+  {
+    pattern: /\[egress-filter\] DoH query blocked: (.+)$/,
+    extract: (match) => ({ domain: match[1].trim(), port: 443 }),
+  },
 ];
 
-function parseBlockedHosts(logContent) {
-  const blocks = new Map(); // Use Map to deduplicate: "host:port" -> { host, port, count }
+function parseBlockedDomains(logContent) {
+  // Use Map to deduplicate: "domain:port" -> { domain, port, count }
+  const blocks = new Map();
 
   for (const line of logContent.split("\n")) {
-    for (const pattern of BLOCKED_PATTERNS) {
+    for (const { pattern, extract } of BLOCKED_PATTERNS) {
       const match = line.match(pattern);
       if (match) {
-        let host, port;
+        const { domain, port } = extract(match);
 
-        if (pattern.source.includes("DoH query")) {
-          // DoH pattern: group 1 is hostname
-          host = match[1];
-          port = 443; // DoH is always HTTPS
-        } else if (match[2] && isNaN(parseInt(match[2]))) {
-          // Pattern with hostname in parentheses: group 1 is port, group 2 is hostname
-          port = parseInt(match[1]);
-          host = match[2];
-        } else if (match[2]) {
-          // IP-only pattern: group 1 is IP, group 2 is port
-          host = match[1];
-          port = parseInt(match[2]);
-        } else {
-          continue;
+        // Skip if it looks like an IP address
+        if (isIpAddress(domain)) {
+          break;
         }
 
-        const key = `${host}:${port}`;
+        const key = `${domain}:${port}`;
         if (blocks.has(key)) {
           blocks.get(key).count++;
         } else {
-          blocks.set(key, { host, port, count: 1 });
+          blocks.set(key, { domain, port, count: 1 });
         }
-        break; // Stop checking patterns once matched
+        break;
       }
     }
   }
@@ -93,21 +100,21 @@ function main() {
     process.exit(1);
   }
 
-  // Parse blocked hosts
-  const blocks = parseBlockedHosts(logContent);
+  // Parse blocked domains
+  const blocks = parseBlockedDomains(logContent);
 
   // Output results
   if (jsonOutput) {
     console.log(
       JSON.stringify({
         blocks: blocks.map((b) => ({
-          host: b.host,
+          domain: b.domain,
           port: b.port,
           count: b.count,
         })),
         message:
           blocks.length > 0
-            ? `${blocks.length} unique host(s) were blocked. Request allowlist access for these hosts.`
+            ? `${blocks.length} domain(s) were blocked. Request allowlist access for these domains.`
             : "No blocked connections detected.",
       })
     );
@@ -115,13 +122,13 @@ function main() {
     if (blocks.length === 0) {
       console.log("No blocked connections detected.");
     } else {
-      console.log("Blocked connections detected:\n");
+      console.log("Blocked domains detected:\n");
       for (const block of blocks) {
         const countStr = block.count > 1 ? ` (${block.count} attempts)` : "";
-        console.log(`  - ${block.host}:${block.port}${countStr}`);
+        console.log(`  - ${block.domain}:${block.port}${countStr}`);
       }
-      console.log("\nTo request access, please contact the administrator with the host names above.");
-      console.log("These hosts need to be added to the egress filter allowlist.");
+      console.log("\nTo request access, use:");
+      console.log("  node request-access.js <domain> --port <port>");
     }
   }
 
