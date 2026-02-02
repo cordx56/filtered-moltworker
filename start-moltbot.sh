@@ -106,25 +106,23 @@ if [ -d "$BACKUP_DIR/skills" ] && [ "$(ls -A $BACKUP_DIR/skills 2>/dev/null)" ];
 fi
 
 # Restore egress-filter allowlist from R2 backup if available
+# Note: Always prefer R2 allowlist over Docker image's default
 EGRESS_CONFIG="/etc/egress-filter/allowlist.yaml"
 if [ -f "$BACKUP_DIR/egress-filter/allowlist.yaml" ]; then
-    if should_restore_from_r2; then
-        echo "Restoring egress-filter allowlist from R2..."
-        mkdir -p /etc/egress-filter
-        cp -f "$BACKUP_DIR/egress-filter/allowlist.yaml" "$EGRESS_CONFIG"
-        echo "Restored egress-filter allowlist from R2 backup"
-    fi
+    echo "Restoring egress-filter allowlist from R2..."
+    mkdir -p /etc/egress-filter
+    cp -f "$BACKUP_DIR/egress-filter/allowlist.yaml" "$EGRESS_CONFIG"
+    echo "Restored egress-filter allowlist from R2 backup"
 fi
 
 # Restore egress-requests from R2 backup if available
+# Note: Always prefer R2 egress-requests over local (preserves request history)
 EGRESS_REQUESTS_DIR="/var/lib/egress-requests"
 if [ -d "$BACKUP_DIR/egress-requests" ] && [ "$(ls -A $BACKUP_DIR/egress-requests 2>/dev/null)" ]; then
-    if should_restore_from_r2; then
-        echo "Restoring egress-requests from R2..."
-        mkdir -p "$EGRESS_REQUESTS_DIR"
-        cp -a "$BACKUP_DIR/egress-requests/." "$EGRESS_REQUESTS_DIR/"
-        echo "Restored egress-requests from R2 backup"
-    fi
+    echo "Restoring egress-requests from R2..."
+    mkdir -p "$EGRESS_REQUESTS_DIR"
+    cp -a "$BACKUP_DIR/egress-requests/." "$EGRESS_REQUESTS_DIR/"
+    echo "Restored egress-requests from R2 backup"
 fi
 
 # If config file still doesn't exist, create from template
