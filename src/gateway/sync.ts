@@ -60,7 +60,7 @@ export async function syncToR2(sandbox: Sandbox, env: MoltbotEnv): Promise<SyncR
   // Run rsync to backup config to R2
   // Note: Use --no-times because s3fs doesn't support setting timestamps
   // Sync: clawdbot config, skills, egress-filter allowlist, and egress-requests
-  const syncCmd = `rsync -r --no-times --delete --exclude='*.lock' --exclude='*.log' --exclude='*.tmp' /root/.clawdbot/ ${R2_MOUNT_PATH}/clawdbot/ && rsync -r --no-times --delete /root/clawd/skills/ ${R2_MOUNT_PATH}/skills/ && mkdir -p ${R2_MOUNT_PATH}/egress-filter && cp /etc/egress-filter/allowlist.yaml ${R2_MOUNT_PATH}/egress-filter/allowlist.yaml 2>/dev/null || true && rsync -r --no-times /var/lib/egress-requests/ ${R2_MOUNT_PATH}/egress-requests/ 2>/dev/null || true && date -Iseconds > ${R2_MOUNT_PATH}/.last-sync`;
+  const syncCmd = `rsync -r --no-times --delete --exclude='*.lock' --exclude='*.log' --exclude='*.tmp' /root/.clawdbot/ ${R2_MOUNT_PATH}/clawdbot/ && rsync -r --no-times --delete /root/clawd/skills/ ${R2_MOUNT_PATH}/skills/ && mkdir -p ${R2_MOUNT_PATH}/egress-filter && (cp /etc/egress-filter/allowlist.yaml ${R2_MOUNT_PATH}/egress-filter/allowlist.yaml 2>/dev/null || true) && (rsync -r --no-times /var/lib/egress-requests/ ${R2_MOUNT_PATH}/egress-requests/ 2>/dev/null || true) && date -Iseconds > ${R2_MOUNT_PATH}/.last-sync`;
   
   try {
     const proc = await sandbox.startProcess(syncCmd);
