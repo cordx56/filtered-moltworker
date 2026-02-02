@@ -298,6 +298,12 @@ else
     EGRESS_CMD=""
 fi
 
+# Egress filter log file for skill access
+# This captures blocked connection messages so skills can notify users
+EGRESS_LOG="/var/log/egress-filter.log"
+: > "$EGRESS_LOG"  # Truncate on startup to prevent unbounded growth
+exec 2> >(tee -a "$EGRESS_LOG" >&2)
+
 if [ -n "$CLAWDBOT_GATEWAY_TOKEN" ]; then
     echo "Starting gateway with token auth..."
     exec $EGRESS_CMD clawdbot gateway --port 18789 --verbose --allow-unconfigured --bind "$BIND_MODE" --token "$CLAWDBOT_GATEWAY_TOKEN"

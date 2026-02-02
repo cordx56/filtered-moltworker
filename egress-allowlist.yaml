@@ -1,0 +1,142 @@
+version: 1
+default_policy: deny
+
+# Disable HTTPS monitoring
+doh:
+  enabled: false
+
+# Allowed domains
+domains:
+  # ClawdHub
+  - pattern: "clawdhub.com"
+    ports: [443]
+  - pattern: "*.clawdhub.com"
+    ports: [443]
+  - pattern: "clawdhub.ai"
+    ports: [443]
+  - pattern: "*.clawdhub.ai"
+    ports: [443]
+
+  # Anthropic API
+  - pattern: "api.anthropic.com"
+    ports: [443]
+    reason: Claude API
+  - pattern: "*.anthropic.com"
+    ports: [443]
+    reason: Anthropic services
+
+  # OpenAI API
+  - pattern: "api.openai.com"
+    ports: [443]
+    reason: OpenAI API
+
+  # Cloudflare AI Gateway
+  - pattern: "*.ai.cloudflare.com"
+    ports: [443]
+    reason: Cloudflare AI Gateway
+
+  # Cloudflare services (secrets, API)
+  - pattern: "*.cloudflare.com"
+    ports: [443]
+    reason: Cloudflare services
+
+  # Telegram API
+  - pattern: "api.telegram.org"
+    ports: [443]
+    reason: Telegram Bot API
+
+  # Discord API
+  - pattern: "discord.com"
+    ports: [443]
+    reason: Discord API
+
+  - pattern: "*.discord.com"
+    ports: [443]
+    reason: Discord services
+
+  - pattern: "gateway.discord.gg"
+    ports: [443]
+    reason: Discord Gateway
+
+  # Slack API
+  - pattern: "slack.com"
+    ports: [443]
+    reason: Slack API
+
+  - pattern: "*.slack.com"
+    ports: [443]
+    reason: Slack services
+
+  # npm registry (for package installation)
+  - pattern: "registry.npmjs.org"
+    ports: [443]
+    reason: npm registry
+
+  - pattern: "*.npmjs.org"
+    ports: [443]
+    reason: npm services
+
+  # GitHub
+  - pattern: "api.github.com"
+    ports: [443]
+    reason: GitHub API
+  - pattern: "github.com"
+    ports: [443]
+    reason: GitHub
+  - pattern: "*.github.com"
+    ports: [443]
+    reason: GitHub services
+  - pattern: "raw.githubusercontent.com"
+    ports: [443]
+    reason: GitHub raw content
+  - pattern: "objects.githubusercontent.com"
+    ports: [443]
+    reason: GitHub objects
+
+  # DoH servers (for TLS MitM)
+  - pattern: "cloudflare-dns.com"
+    ports: [443]
+    reason: Cloudflare DoH
+  - pattern: "*.cloudflare-dns.com"
+    ports: [443]
+    reason: Cloudflare DoH
+
+# Allowed IP ranges
+ip_ranges:
+  # Localhost
+  - cidr: "127.0.0.0/8"
+    reason: Localhost (including proxy)
+  - cidr: "::1/128"
+    reason: IPv6 localhost
+  - cidr: "::ffff:127.0.0.0/104"
+    reason: IPv4-mapped localhost
+
+  # Private networks (for internal services)
+  - cidr: "10.0.0.0/8"
+    reason: Private network (10.x.x.x)
+  - cidr: "172.16.0.0/12"
+    reason: Private network (172.16-31.x.x)
+  - cidr: "192.168.0.0/16"
+    reason: Private network (192.168.x.x)
+
+  # Cloudflare DNS
+  - cidr: "1.1.1.1/32"
+    ports: [53, 443]
+    reason: Cloudflare DNS
+  - cidr: "1.0.0.1/32"
+    ports: [53, 443]
+    reason: Cloudflare DNS secondary
+  - cidr: "104.16.0.0/12"
+    ports: [443]
+    reason: Cloudflare IP range
+  - cidr: "2606:4700::/32"
+    ports: [53, 443]
+    reason: Cloudflare IPv6
+
+  # Google DNS (optional)
+  # - cidr: "8.8.8.8/32"
+  #   ports: [53, 443]
+  #   reason: Google DNS
+  # - cidr: "8.8.4.4/32"
+  #   ports: [53, 443]
+  #   reason: Google DNS secondary
