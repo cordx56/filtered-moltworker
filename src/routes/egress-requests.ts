@@ -113,8 +113,8 @@ egressRequestsApi.post('/', async (c) => {
     return c.json({ error: 'domain is required' }, 400);
   }
 
-  // Validate domain format (must be a valid domain, not IP)
-  if (!/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/.test(domain)) {
+  // Validate domain format (allows wildcards like *.example.com)
+  if (!/^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/.test(domain)) {
     return c.json({ error: 'Invalid domain format' }, 400);
   }
 
