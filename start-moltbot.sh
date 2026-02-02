@@ -118,9 +118,9 @@ fi
 # Restore egress-requests from R2 backup if available
 # Note: Always prefer R2 egress-requests over local (preserves request history)
 EGRESS_REQUESTS_DIR="/var/lib/egress-requests"
+mkdir -p "$EGRESS_REQUESTS_DIR/pending" "$EGRESS_REQUESTS_DIR/approved" "$EGRESS_REQUESTS_DIR/denied"
 if [ -d "$BACKUP_DIR/egress-requests" ] && [ "$(ls -A $BACKUP_DIR/egress-requests 2>/dev/null)" ]; then
     echo "Restoring egress-requests from R2..."
-    mkdir -p "$EGRESS_REQUESTS_DIR"
     cp -a "$BACKUP_DIR/egress-requests/." "$EGRESS_REQUESTS_DIR/"
     echo "Restored egress-requests from R2 backup"
 fi

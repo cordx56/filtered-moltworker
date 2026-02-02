@@ -64,10 +64,9 @@ RUN chmod +x /usr/local/bin/start-moltbot.sh
 COPY moltbot.json.template /root/.clawdbot-templates/moltbot.json.template
 
 # Copy custom skills
+# - egress-request: Bot-accessible (check blocks, create requests)
+# - egress-admin: Admin-only (approve requests, add to allowlist) - requires exec-approval
 COPY skills/ /root/clawd/skills/
-
-# Copy admin scripts (not accessible to AI agents)
-COPY admin-scripts/ /root/admin-scripts/
 
 # Set working directory
 WORKDIR /root/clawd

@@ -13,7 +13,7 @@ import { syncToR2 } from '../gateway/sync';
 import { waitForProcess } from '../gateway/utils';
 
 const SKILLS_PATH = '/root/clawd/skills/egress-request/scripts';
-const ADMIN_SCRIPTS_PATH = '/root/admin-scripts';
+const ADMIN_SCRIPTS_PATH = '/root/clawd/skills/egress-admin';
 const CLI_TIMEOUT_MS = 20_000;
 const SYNC_TIMEOUT_MS = 30_000;
 

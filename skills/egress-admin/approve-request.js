@@ -20,11 +20,16 @@
 const fs = require("fs");
 const path = require("path");
 
+const {
+  DEFAULT_CONFIG,
+  addDomainToAllowlist,
+  addIpToAllowlist,
+} = require(path.join(__dirname, "allowlist-utils.js"));
+
 const REQUESTS_DIR = "/var/lib/egress-requests";
 const PENDING_DIR = path.join(REQUESTS_DIR, "pending");
 const APPROVED_DIR = path.join(REQUESTS_DIR, "approved");
 const DENIED_DIR = path.join(REQUESTS_DIR, "denied");
-const DEFAULT_CONFIG = "/etc/egress-filter/allowlist.yaml";
 
 function parseArgs(args) {
   const result = {
@@ -65,7 +70,6 @@ function ensureDirectories() {
 function loadRequest(id) {
   const filepath = path.join(PENDING_DIR, `${id}.json`);
   if (!fs.existsSync(filepath)) {
-    // Try to find by partial ID
     const files = fs.readdirSync(PENDING_DIR);
     const match = files.find((f) => f.startsWith(id) && f.endsWith(".json"));
     if (match) {
@@ -105,105 +109,17 @@ function moveRequest(request, fromDir, toDir) {
   }
 }
 
-function addDomainToAllowlist(configPath, domain, port, reason) {
-  if (!fs.existsSync(configPath)) {
-    console.error(`Error: Config file not found: ${configPath}`);
-    return false;
-  }
-
-  let content = fs.readFileSync(configPath, "utf-8");
-
-  // Check if domain is already in allowlist
-  if (content.includes(`pattern: "${domain}"`) || content.includes(`pattern: '${domain}'`)) {
-    console.log(`  Domain ${domain} is already in the allowlist`);
-    return true;
-  }
-
-  // Find the domains section and append the new rule
-  const domainsMatch = content.match(/^domains:\s*$/m);
-  if (!domainsMatch) {
-    console.error("Error: Could not find 'domains:' section in config");
-    return false;
-  }
-
-  // Build the new rule
-  const indent = "  ";
-  let newRule = `\n${indent}# Added via egress-request approval\n`;
-  newRule += `${indent}- pattern: "${domain}"\n`;
-  newRule += `${indent}  ports: [${port}]\n`;
-  if (reason) {
-    // Escape special characters in reason for YAML
-    const safeReason = reason.replace(/"/g, '\\"');
-    newRule += `${indent}  reason: "${safeReason}"\n`;
-  }
-
-  // Find position after "domains:" line
-  const insertPos = domainsMatch.index + domainsMatch[0].length;
-
-  // Insert the new rule
-  content = content.slice(0, insertPos) + newRule + content.slice(insertPos);
-
-  // Write back
-  fs.writeFileSync(configPath, content);
-  return true;
-}
-
-function addIpToAllowlist(configPath, ip, port, reason) {
-  if (!fs.existsSync(configPath)) {
-    console.error(`Error: Config file not found: ${configPath}`);
-    return false;
-  }
-
-  let content = fs.readFileSync(configPath, "utf-8");
-
-  // Check if IP is already in allowlist
-  if (content.includes(`cidr: "${ip}"`) || content.includes(`cidr: '${ip}'`)) {
-    console.log(`  IP ${ip} is already in the allowlist`);
-    return true;
-  }
-
-  // Find the ip_ranges section and append the new rule
-  const ipRangesMatch = content.match(/^ip_ranges:\s*$/m);
-  if (!ipRangesMatch) {
-    console.error("Error: Could not find 'ip_ranges:' section in config");
-    return false;
-  }
-
-  // Build the new rule
-  const indent = "  ";
-  let newRule = `\n${indent}# Added via egress-request approval\n`;
-  newRule += `${indent}- cidr: "${ip}"\n`;
-  if (port) {
-    newRule += `${indent}  ports: [${port}]\n`;
-  }
-  if (reason) {
-    // Escape special characters in reason for YAML
-    const safeReason = reason.replace(/"/g, '\\"');
-    newRule += `${indent}  reason: "${safeReason}"\n`;
-  }
-
-  // Find position after "ip_ranges:" line
-  const insertPos = ipRangesMatch.index + ipRangesMatch[0].length;
-
-  // Insert the new rule
-  content = content.slice(0, insertPos) + newRule + content.slice(insertPos);
-
-  // Write back
-  fs.writeFileSync(configPath, content);
-  return true;
-}
-
 function approveRequest(request, configPath) {
   const target = request.domain || request.ip;
   const isIp = !!request.ip;
   console.log(`Approving request: ${target}:${request.port}`);
 
-  // Add to allowlist (domain or IP)
+  const comment = "Added via egress-request approval";
   let success;
   if (isIp) {
-    success = addIpToAllowlist(configPath, request.ip, request.port, request.reason);
+    success = addIpToAllowlist(configPath, request.ip, request.port, request.reason, comment);
   } else {
-    success = addDomainToAllowlist(configPath, request.domain, request.port, request.reason);
+    success = addDomainToAllowlist(configPath, request.domain, request.port, request.reason, comment);
   }
 
   if (!success) {
@@ -211,11 +127,9 @@ function approveRequest(request, configPath) {
     return false;
   }
 
-  // Update request status
   request.status = "approved";
   request.approved_at = new Date().toISOString();
 
-  // Move to approved directory
   moveRequest(request, PENDING_DIR, APPROVED_DIR);
 
   console.log(`  Added ${target}:${request.port} to allowlist`);
@@ -227,14 +141,12 @@ function denyRequest(request, reason) {
   const target = request.domain || request.ip;
   console.log(`Denying request: ${target}:${request.port}`);
 
-  // Update request status
   request.status = "denied";
   request.denied_at = new Date().toISOString();
   if (reason) {
     request.deny_reason = reason;
   }
 
-  // Move to denied directory
   moveRequest(request, PENDING_DIR, DENIED_DIR);
 
   console.log("  Request denied and archived");
@@ -274,7 +186,6 @@ function main() {
     ensureDirectories();
 
     if (all) {
-      // Approve or deny all pending requests
       const pending = loadAllPending();
       if (pending.length === 0) {
         console.log(deny ? "No pending requests to deny." : "No pending requests to approve.");
@@ -306,7 +217,6 @@ function main() {
       return;
     }
 
-    // Single request
     const request = loadRequest(id);
     if (!request) {
       console.error(`Error: Request not found: ${id}`);
