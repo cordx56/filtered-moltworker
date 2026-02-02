@@ -286,8 +286,8 @@ BIND_MODE="lan"
 echo "Dev mode: ${CLAWDBOT_DEV_MODE:-false}, Bind mode: $BIND_MODE"
 
 # Egress filter configuration
-EGRESS_FILTER="/usr/local/bin/molt-egress"
-EGRESS_CONFIG="/etc/molt-egress/allowlist.yaml"
+EGRESS_FILTER="/usr/local/bin/egress-filter"
+EGRESS_CONFIG="/etc/egress-filter/allowlist.yaml"
 
 # Check if egress filter is available
 if [ -x "$EGRESS_FILTER" ] && [ -f "$EGRESS_CONFIG" ]; then

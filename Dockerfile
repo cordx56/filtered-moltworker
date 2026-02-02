@@ -42,11 +42,11 @@ RUN npm install -g clawdbot@2026.1.24-3 \
     && clawdbot --version
 
 # Copy molt-egress binary from builder stage
-COPY --from=egress-builder /build/target/release/molt-egress /usr/local/bin/molt-egress
-RUN chmod +x /usr/local/bin/molt-egress
+COPY --from=egress-builder /build/target/release/egress-filter /usr/local/bin/egress-filter
+RUN chmod +x /usr/local/bin/egress-filter
 
 # Copy egress allowlist configuration
-COPY egress-allowlist.yaml /etc/molt-egress/allowlist.yaml
+COPY egress-allowlist.yaml /etc/egress-filter/allowlist.yaml
 
 # Create moltbot directories (paths still use clawdbot until upstream renames)
 # Templates are stored in /root/.clawdbot-templates for initialization
