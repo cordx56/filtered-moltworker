@@ -1,6 +1,12 @@
-# OpenClaw on Cloudflare Workers
+# Filtered-OpenClaw on Cloudflare Workers
 
 Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly Clawdbot) personal AI assistant in a [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/).
+
+This repository provides IP-based egress filtering. Our code intercepts Linux system calls and determines whether access to AI-requested domains is allowed or denied.
+
+Denied access attempts are logged, and you can allow them in the admin panel.
+The filtering operates at the IP protocol level, so attackers cannot steal your data even if they specify their server as an IP address.
+You can allow internet access by domain name. Our filter automatically checks DNS responses and allows their corresponding IP addresses.
 
 ![moltworker architecture](./assets/logo.png)
 
