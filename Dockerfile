@@ -1,10 +1,32 @@
+# ============================================================
+# Stage 1: Build molt-egress
+# ============================================================
+FROM rust:1.93-bookworm AS egress-builder
+
+# Install libseccomp development files
+RUN apt-get update && apt-get install -y libseccomp-dev
+
+WORKDIR /build
+
+# Copy egress-filter source
+COPY egress-filter/ ./
+
+# Build release binary
+RUN cargo build --release
+
+# ============================================================
+# Stage 2: Final image
+# ============================================================
 FROM docker.io/cloudflare/sandbox:0.7.0
+
+# Install libseccomp runtime library
+RUN apt-get update && apt-get install -y libseccomp2
 
 # Install Node.js 22 (required by clawdbot) and rsync (for R2 backup sync)
 # The base image has Node 20, we need to replace it with Node 22
 # Using direct binary download for reliability
 ENV NODE_VERSION=22.13.1
-RUN apt-get update && apt-get install -y xz-utils ca-certificates rsync \
+RUN apt-get install -y xz-utils ca-certificates rsync \
     && curl -fsSLk https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz -o /tmp/node.tar.xz \
     && tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1 \
     && rm /tmp/node.tar.xz \
@@ -19,6 +41,13 @@ RUN npm install -g pnpm
 RUN npm install -g clawdbot@2026.1.24-3 \
     && clawdbot --version
 
+# Copy molt-egress binary from builder stage
+COPY --from=egress-builder /build/target/release/molt-egress /usr/local/bin/molt-egress
+RUN chmod +x /usr/local/bin/molt-egress
+
+# Copy egress whitelist configuration
+COPY egress-whitelist.yaml /etc/molt-egress/whitelist.yaml
+
 # Create moltbot directories (paths still use clawdbot until upstream renames)
 # Templates are stored in /root/.clawdbot-templates for initialization
 RUN mkdir -p /root/.clawdbot \
@@ -27,7 +56,7 @@ RUN mkdir -p /root/.clawdbot \
     && mkdir -p /root/clawd/skills
 
 # Copy startup script
-# Build cache bust: 2026-01-28-v26-browser-skill
+# Build cache bust: 2026-01-30-egress-filter
 COPY start-moltbot.sh /usr/local/bin/start-moltbot.sh
 RUN chmod +x /usr/local/bin/start-moltbot.sh
 

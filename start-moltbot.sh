@@ -285,10 +285,23 @@ rm -f "$CONFIG_DIR/gateway.lock" 2>/dev/null || true
 BIND_MODE="lan"
 echo "Dev mode: ${CLAWDBOT_DEV_MODE:-false}, Bind mode: $BIND_MODE"
 
+# Egress filter configuration
+EGRESS_FILTER="/usr/local/bin/molt-egress"
+EGRESS_CONFIG="/etc/molt-egress/whitelist.yaml"
+
+# Check if egress filter is available
+if [ -x "$EGRESS_FILTER" ] && [ -f "$EGRESS_CONFIG" ]; then
+    echo "Starting gateway with egress filtering..."
+    EGRESS_CMD="$EGRESS_FILTER -c $EGRESS_CONFIG"
+else
+    echo "Egress filter not available, starting gateway without filtering..."
+    EGRESS_CMD=""
+fi
+
 if [ -n "$CLAWDBOT_GATEWAY_TOKEN" ]; then
     echo "Starting gateway with token auth..."
-    exec clawdbot gateway --port 18789 --verbose --allow-unconfigured --bind "$BIND_MODE" --token "$CLAWDBOT_GATEWAY_TOKEN"
+    exec $EGRESS_CMD clawdbot gateway --port 18789 --verbose --allow-unconfigured --bind "$BIND_MODE" --token "$CLAWDBOT_GATEWAY_TOKEN"
 else
     echo "Starting gateway with device pairing (no token)..."
-    exec clawdbot gateway --port 18789 --verbose --allow-unconfigured --bind "$BIND_MODE"
+    exec $EGRESS_CMD clawdbot gateway --port 18789 --verbose --allow-unconfigured --bind "$BIND_MODE"
 fi
