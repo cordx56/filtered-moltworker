@@ -1,0 +1,5 @@
+{
+  "name": "egress-admin-scripts",
+  "private": true,
+  "type": "commonjs"
+}

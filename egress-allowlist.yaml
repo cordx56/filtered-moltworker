@@ -16,6 +16,10 @@ domains:
     ports: [443]
   - pattern: "*.clawdhub.ai"
     ports: [443]
+  - pattern: "clawhub.ai"
+    ports: [443]
+  - pattern: "*.clawhub.ai"
+    ports: [443]
 
   # Anthropic API
   - pattern: "api.anthropic.com"
@@ -129,7 +133,10 @@ ip_ranges:
   - cidr: "104.16.0.0/12"
     ports: [443]
     reason: Cloudflare IP range
-  - cidr: "2606:4700::/32"
+  - cidr: "2606:4700:4700::1111"
+    ports: [53, 443]
+    reason: Cloudflare IPv6
+  - cidr: "2606:4700:4700::1001"
     ports: [53, 443]
     reason: Cloudflare IPv6
 
