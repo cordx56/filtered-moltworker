@@ -70,11 +70,16 @@ function main() {
     return;
   }
 
+  // Helper to get target display string
+  const getTarget = (req) => req.domain || req.ip || "unknown";
+
   if (pending.length > 0) {
     console.log("=== Pending Requests ===\n");
     for (const req of pending) {
+      const target = getTarget(req);
+      const label = req.ip ? "IP" : "Domain";
       console.log(`  ID: ${req.id}`);
-      console.log(`  Domain: ${req.domain}:${req.port}`);
+      console.log(`  ${label}: ${target}:${req.port}`);
       console.log(`  Reason: ${req.reason}`);
       console.log(`  Requested: ${formatDate(req.requested_at)}`);
       console.log("");
@@ -88,7 +93,8 @@ function main() {
   if (showAll && approved.length > 0) {
     console.log("=== Approved Requests ===\n");
     for (const req of approved) {
-      console.log(`  ${req.domain}:${req.port} - ${req.reason}`);
+      const target = getTarget(req);
+      console.log(`  ${target}:${req.port} - ${req.reason}`);
       console.log(`    Approved: ${formatDate(req.approved_at || req.requested_at)}`);
     }
     console.log("");
@@ -97,7 +103,8 @@ function main() {
   if (showAll && denied.length > 0) {
     console.log("=== Denied Requests ===\n");
     for (const req of denied) {
-      console.log(`  ${req.domain}:${req.port} - ${req.reason}`);
+      const target = getTarget(req);
+      console.log(`  ${target}:${req.port} - ${req.reason}`);
       console.log(`    Denied: ${formatDate(req.denied_at || req.requested_at)}`);
       if (req.deny_reason) {
         console.log(`    Reason: ${req.deny_reason}`);

@@ -147,7 +147,8 @@ export async function triggerSync(): Promise<SyncResponse> {
 
 export interface EgressRequest {
   id: string;
-  domain: string;
+  domain?: string;
+  ip?: string;
   port: number;
   reason?: string;
   requested_at: string;
@@ -158,7 +159,8 @@ export interface EgressRequest {
 }
 
 export interface BlockedConnection {
-  domain: string;
+  domain?: string;
+  ip?: string;
   port: number;
   count: number;
 }
@@ -205,13 +207,13 @@ export async function getBlockedConnections(): Promise<BlockedConnectionsRespons
 }
 
 export async function createEgressRequest(
-  domain: string,
+  target: { domain: string } | { ip: string },
   port: number = 443,
   reason?: string
 ): Promise<EgressActionResponse> {
   return apiRequest<EgressActionResponse>('/egress-requests', {
     method: 'POST',
-    body: JSON.stringify({ domain, port, reason }),
+    body: JSON.stringify({ ...target, port, reason }),
   });
 }
 

@@ -93,6 +93,31 @@ egressRequestsApi.get('/blocked', async (c) => {
   }
 });
 
+// IPv4: 192.168.1.1 or 192.168.1.0/24
+const IPV4_PATTERN = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
+// IPv6: ::1 or 2001:db8::1 or 2001:db8::/32
+const IPV6_PATTERN = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}(\/\d{1,3})?$/;
+// Domain: example.com or *.example.com
+const DOMAIN_PATTERN = /^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
+
+function isValidIp(ip: string): boolean {
+  // Check basic pattern first
+  if (!IPV4_PATTERN.test(ip) && !IPV6_PATTERN.test(ip)) {
+    return false;
+  }
+  // For IPv4, validate each octet
+  if (IPV4_PATTERN.test(ip)) {
+    const [addr, prefix] = ip.split('/');
+    const octets = addr.split('.').map(Number);
+    if (octets.some((o) => o < 0 || o > 255)) return false;
+    if (prefix !== undefined) {
+      const prefixNum = Number(prefix);
+      if (prefixNum < 0 || prefixNum > 32) return false;
+    }
+  }
+  return true;
+}
+
 /**
  * POST /egress-requests
  * Create a new access request
@@ -100,28 +125,41 @@ egressRequestsApi.get('/blocked', async (c) => {
 egressRequestsApi.post('/', async (c) => {
   const sandbox = c.get('sandbox');
 
-  let body: { domain: string; port?: number; reason?: string };
+  let body: { domain?: string; ip?: string; port?: number; reason?: string };
   try {
     body = await c.req.json();
   } catch {
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { domain, port = 443, reason } = body;
+  const { domain, ip, port = 443, reason } = body;
 
-  if (!domain) {
-    return c.json({ error: 'domain is required' }, 400);
+  // Either domain or ip is required, but not both
+  if (!domain && !ip) {
+    return c.json({ error: 'domain or ip is required' }, 400);
+  }
+  if (domain && ip) {
+    return c.json({ error: 'Specify either domain or ip, not both' }, 400);
   }
 
-  // Validate domain format (allows wildcards like *.example.com)
-  if (!/^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/.test(domain)) {
+  // Validate domain format
+  if (domain && !DOMAIN_PATTERN.test(domain)) {
     return c.json({ error: 'Invalid domain format' }, 400);
+  }
+
+  // Validate IP format
+  if (ip && !isValidIp(ip)) {
+    return c.json({ error: 'Invalid IP address format' }, 400);
   }
 
   try {
     await ensureMoltbotGateway(sandbox, c.env);
 
-    let cmd = `node ${SKILLS_PATH}/request-access.js "${domain}" --port ${port}`;
+    const target = domain || ip;
+    let cmd = `node ${SKILLS_PATH}/request-access.js "${target}" --port ${port}`;
+    if (ip) {
+      cmd += ' --ip';
+    }
     if (reason) {
       // Escape reason for shell
       const escapedReason = reason.replace(/"/g, '\\"');
@@ -137,7 +175,8 @@ egressRequestsApi.post('/', async (c) => {
 
     return c.json({
       success,
-      domain,
+      domain: domain || undefined,
+      ip: ip || undefined,
       port,
       message: success ? 'Request created' : 'Failed to create request',
       output: stdout,

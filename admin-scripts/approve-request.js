@@ -104,7 +104,7 @@ function moveRequest(request, fromDir, toDir) {
   }
 }
 
-function addToAllowlist(configPath, domain, port, reason) {
+function addDomainToAllowlist(configPath, domain, port, reason) {
   if (!fs.existsSync(configPath)) {
     console.error(`Error: Config file not found: ${configPath}`);
     return false;
@@ -147,11 +147,65 @@ function addToAllowlist(configPath, domain, port, reason) {
   return true;
 }
 
-function approveRequest(request, configPath) {
-  console.log(`Approving request: ${request.domain}:${request.port}`);
+function addIpToAllowlist(configPath, ip, port, reason) {
+  if (!fs.existsSync(configPath)) {
+    console.error(`Error: Config file not found: ${configPath}`);
+    return false;
+  }
 
-  // Add to allowlist
-  if (!addToAllowlist(configPath, request.domain, request.port, request.reason)) {
+  let content = fs.readFileSync(configPath, "utf-8");
+
+  // Check if IP is already in allowlist
+  if (content.includes(`cidr: "${ip}"`) || content.includes(`cidr: '${ip}'`)) {
+    console.log(`  IP ${ip} is already in the allowlist`);
+    return true;
+  }
+
+  // Find the ip_ranges section and append the new rule
+  const ipRangesMatch = content.match(/^ip_ranges:\s*$/m);
+  if (!ipRangesMatch) {
+    console.error("Error: Could not find 'ip_ranges:' section in config");
+    return false;
+  }
+
+  // Build the new rule
+  const indent = "  ";
+  let newRule = `\n${indent}# Added via egress-request approval\n`;
+  newRule += `${indent}- cidr: "${ip}"\n`;
+  if (port) {
+    newRule += `${indent}  ports: [${port}]\n`;
+  }
+  if (reason) {
+    // Escape special characters in reason for YAML
+    const safeReason = reason.replace(/"/g, '\\"');
+    newRule += `${indent}  reason: "${safeReason}"\n`;
+  }
+
+  // Find position after "ip_ranges:" line
+  const insertPos = ipRangesMatch.index + ipRangesMatch[0].length;
+
+  // Insert the new rule
+  content = content.slice(0, insertPos) + newRule + content.slice(insertPos);
+
+  // Write back
+  fs.writeFileSync(configPath, content);
+  return true;
+}
+
+function approveRequest(request, configPath) {
+  const target = request.domain || request.ip;
+  const isIp = !!request.ip;
+  console.log(`Approving request: ${target}:${request.port}`);
+
+  // Add to allowlist (domain or IP)
+  let success;
+  if (isIp) {
+    success = addIpToAllowlist(configPath, request.ip, request.port, request.reason);
+  } else {
+    success = addDomainToAllowlist(configPath, request.domain, request.port, request.reason);
+  }
+
+  if (!success) {
     console.error("  Failed to add to allowlist");
     return false;
   }
@@ -163,13 +217,14 @@ function approveRequest(request, configPath) {
   // Move to approved directory
   moveRequest(request, PENDING_DIR, APPROVED_DIR);
 
-  console.log(`  Added ${request.domain}:${request.port} to allowlist`);
+  console.log(`  Added ${target}:${request.port} to allowlist`);
   console.log("  Request approved and archived");
   return true;
 }
 
 function denyRequest(request, reason) {
-  console.log(`Denying request: ${request.domain}:${request.port}`);
+  const target = request.domain || request.ip;
+  console.log(`Denying request: ${target}:${request.port}`);
 
   // Update request status
   request.status = "denied";

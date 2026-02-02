@@ -100,10 +100,14 @@ export function EgressRequestsPage() {
     }
   };
 
-  const handleCreateRequest = async (domain: string, port: number) => {
-    setActionInProgress(`create-${domain}`);
+  const handleCreateRequest = async (
+    target: { domain: string } | { ip: string },
+    port: number
+  ) => {
+    const targetKey = 'domain' in target ? target.domain : target.ip;
+    setActionInProgress(`create-${targetKey}`);
     try {
-      const result = await createEgressRequest(domain, port);
+      const result = await createEgressRequest(target, port);
       if (result.success) {
         await fetchData();
       } else {
@@ -186,25 +190,31 @@ export function EgressRequestsPage() {
           <p className="empty-message">No blocked connections detected.</p>
         ) : (
           <div className="blocked-grid">
-            {blocked.map((block, idx) => (
-              <div key={`${block.domain}-${block.port}-${idx}`} className="blocked-card">
-                <div className="blocked-info">
-                  <span className="blocked-domain">{block.domain}</span>
-                  <span className="blocked-port">:{block.port}</span>
-                  {block.count > 1 && (
-                    <span className="blocked-count">({block.count} attempts)</span>
-                  )}
+            {blocked.map((block, idx) => {
+              const target = block.domain || block.ip || 'unknown';
+              const targetParam = block.domain
+                ? { domain: block.domain }
+                : { ip: block.ip! };
+              return (
+                <div key={`${target}-${block.port}-${idx}`} className="blocked-card">
+                  <div className="blocked-info">
+                    <span className="blocked-domain">{target}</span>
+                    <span className="blocked-port">:{block.port}</span>
+                    {block.count > 1 && (
+                      <span className="blocked-count">({block.count} attempts)</span>
+                    )}
+                  </div>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleCreateRequest(targetParam, block.port)}
+                    disabled={actionInProgress !== null}
+                  >
+                    {actionInProgress === `create-${target}` && <ButtonSpinner />}
+                    Request Access
+                  </button>
                 </div>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => handleCreateRequest(block.domain, block.port)}
-                  disabled={actionInProgress !== null}
-                >
-                  {actionInProgress === `create-${block.domain}` && <ButtonSpinner />}
-                  Request Access
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -234,7 +244,7 @@ export function EgressRequestsPage() {
             {pending.map((req) => (
               <div key={req.id} className="request-card pending">
                 <div className="request-header">
-                  <span className="request-domain">{req.domain}:{req.port}</span>
+                  <span className="request-domain">{req.domain || req.ip}:{req.port}</span>
                   <span className="request-badge pending">Pending</span>
                 </div>
                 <div className="request-details">
@@ -294,7 +304,7 @@ export function EgressRequestsPage() {
                   {approved.map((req) => (
                     <div key={req.id} className="request-card approved">
                       <div className="request-header">
-                        <span className="request-domain">{req.domain}:{req.port}</span>
+                        <span className="request-domain">{req.domain || req.ip}:{req.port}</span>
                         <span className="request-badge approved">Approved</span>
                       </div>
                       <div className="request-details">
@@ -324,7 +334,7 @@ export function EgressRequestsPage() {
                   {denied.map((req) => (
                     <div key={req.id} className="request-card denied">
                       <div className="request-header">
-                        <span className="request-domain">{req.domain}:{req.port}</span>
+                        <span className="request-domain">{req.domain || req.ip}:{req.port}</span>
                         <span className="request-badge denied">Denied</span>
                       </div>
                       <div className="request-details">
