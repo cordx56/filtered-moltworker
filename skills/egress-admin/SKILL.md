@@ -55,6 +55,10 @@ Options:
 - `--all` - Process all pending requests
 - `--config <path>` - Path to allowlist.yaml
 
+## Note
+
+No restart of egress-filter is required after updating the allowlist. Changes are applied automatically.
+
 ## File Locations
 
 - Allowlist config: `/etc/egress-filter/allowlist.yaml`
