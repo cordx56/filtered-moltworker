@@ -24,6 +24,7 @@ const {
   DEFAULT_CONFIG,
   addDomainToAllowlist,
   addIpToAllowlist,
+  syncAllowlistToR2,
 } = require(path.join(__dirname, "allowlist-utils.js"));
 
 const REQUESTS_DIR = "/var/lib/egress-requests";
@@ -126,6 +127,8 @@ function approveRequest(request, configPath) {
     console.error("  Failed to add to allowlist");
     return false;
   }
+
+  syncAllowlistToR2(configPath);
 
   request.status = "approved";
   request.approved_at = new Date().toISOString();

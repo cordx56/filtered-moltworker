@@ -5,8 +5,14 @@
  */
 
 const fs = require("fs");
+const path = require("path");
 
 const DEFAULT_CONFIG = "/etc/egress-filter/allowlist.yaml";
+
+// R2 mount path for persistent storage (must match src/config.ts)
+const R2_MOUNT_PATH = "/data/moltbot";
+const R2_ALLOWLIST_DIR = path.join(R2_MOUNT_PATH, "egress-filter");
+const R2_ALLOWLIST_PATH = path.join(R2_ALLOWLIST_DIR, "allowlist.yaml");
 
 /**
  * Add a domain pattern to the allowlist.
@@ -177,10 +183,26 @@ function isValidPort(port) {
   return ports.every((p) => !isNaN(p) && p >= 1 && p <= 65535);
 }
 
+/**
+ * allowlistファイルをR2マウントパスにバックアップする。
+ * R2がマウントされていない場合は何もしない（cronで同期される）。
+ * @param {string} configPath - バックアップ元のallowlist.yamlパス
+ */
+function syncAllowlistToR2(configPath) {
+  try {
+    if (!fs.existsSync(R2_MOUNT_PATH)) return;
+    fs.mkdirSync(R2_ALLOWLIST_DIR, { recursive: true });
+    fs.copyFileSync(configPath, R2_ALLOWLIST_PATH);
+  } catch {
+    // R2未マウント時は無視（cronで同期される）
+  }
+}
+
 module.exports = {
   DEFAULT_CONFIG,
   addDomainToAllowlist,
   addIpToAllowlist,
+  syncAllowlistToR2,
   isValidDomain,
   isValidIp,
   isValidPort,

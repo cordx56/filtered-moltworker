@@ -22,6 +22,7 @@ const {
   DEFAULT_CONFIG,
   addDomainToAllowlist,
   addIpToAllowlist,
+  syncAllowlistToR2,
   isValidDomain,
   isValidIp,
   isValidPort,
@@ -109,6 +110,7 @@ function main() {
   }
 
   if (success) {
+    syncAllowlistToR2(configPath);
     console.log("✓ Successfully added to egress allowlist:");
     console.log("");
     if (isIp) {
