@@ -312,7 +312,7 @@ EGRESS_CONFIG="/etc/egress-filter/allowlist.yaml"
 # Check if egress filter is available
 if [ -x "$EGRESS_FILTER" ] && [ -f "$EGRESS_CONFIG" ]; then
     echo "Starting gateway with egress filtering..."
-    EGRESS_CMD="$EGRESS_FILTER -c $EGRESS_CONFIG -p 7653"
+    EGRESS_CMD="$EGRESS_FILTER -c $EGRESS_CONFIG"
 else
     echo "Egress filter not available, starting gateway without filtering..."
     EGRESS_CMD=""

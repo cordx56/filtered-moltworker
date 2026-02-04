@@ -44,7 +44,6 @@ RUN npm install -g clawdbot@2026.1.24-3 \
 # Copy molt-egress binary from builder stage
 COPY --from=egress-builder /build/target/release/egress-filter /usr/local/bin/egress-filter
 RUN chmod +x /usr/local/bin/egress-filter
-EXPOSE 7653
 
 # Copy egress allowlist configuration
 COPY egress-allowlist.yaml /etc/egress-filter/allowlist.yaml
