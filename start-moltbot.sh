@@ -322,7 +322,7 @@ fi
 # This captures blocked connection messages so skills can notify users
 EGRESS_LOG="/var/log/egress-filter.log"
 : > "$EGRESS_LOG"  # Truncate on startup to prevent unbounded growth
-exec 2> >(tee -a "$EGRESS_LOG" >&2)
+exec 1> >(tee -a "$EGRESS_LOG")
 
 if [ -n "$CLAWDBOT_GATEWAY_TOKEN" ]; then
     echo "Starting gateway with token auth..."
